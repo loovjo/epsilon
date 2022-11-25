@@ -1,6 +1,6 @@
 [package]
 name = "epsilon"
-version = "0.3.0"
+version = "0.3.13"
 edition = "2021"
 
 description = "Fast autograd using dual numbers"
