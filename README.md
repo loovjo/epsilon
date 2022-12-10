@@ -1,6 +1,6 @@
 # `epsilon` - Fast autograd using dual numbers
 
-Dual numbers are a straightforward awy of doing forward gradient
+Dual numbers are a straightforward way of doing forward gradient
 propagation, i.e. keep track of derivatives for all expressions, to
 automatically differentiate a function without storing a computation graph.
 
