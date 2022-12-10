@@ -42,6 +42,10 @@
 //! assert_eq!(dzdy, 5.934302379121921); // y*cos(y) + sin(y)
 //! ```
 
+// Reexport to access from macros
+#[doc(hidden)]
+pub use paste::paste;
+
 #[macro_export]
 /// # Create a dual number
 /// `$name` specifies the name of the type, and each `$comp` is a dual compoment
@@ -70,7 +74,7 @@
 
 macro_rules! make_dual {
     ($name:ident, $($comp:ident),+) => { make_dual!{ $name, $($comp,)+ } };
-    ($name:ident, $($comp:ident,)+) => { paste::paste! {
+    ($name:ident, $($comp:ident,)+) => { $crate::paste! {
         macro_rules! impl_reverse {
             ($t:ty, $op:ident, $fn:ident) => {
                 impl std::ops::$op<$t> for f64 {
