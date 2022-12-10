@@ -33,7 +33,7 @@
 //!
 //! let (x, y) = (MyDual::x(5.), MyDual::y(7.)); // Perform the calculations, and compute the derivative at x=5, y=7
 //!
-//! let z = x.pow(2.) + y * y.sin();
+//! let z = x.powf(2.) + y * y.sin();
 //!
 //! let dzdx = z.d_dx();
 //! let dzdy = z.d_dy();
@@ -48,10 +48,11 @@ pub use paste::paste;
 
 #[macro_export]
 /// # Create a dual number
-/// `$name` specifies the name of the type, and each `$comp` is a dual compoment
-/// of the type.
+/// `$name` specifies the name of the type, $inner specifies the backing type
+/// (either `f32 `or `f64`, defaults to `f64`), and each `$comp` is a dual
+/// compoment of the type.
 ///
-/// For example, `make_dual! { SampleXYZ, x, y, z, }` will generate a struct
+/// For example, `make_dual! { SampleXYZ: f64, x, y, z, }` will generate a struct
 /// ```
 /// struct SampleXYZ {
 ///     real: f64,
@@ -73,15 +74,17 @@ pub use paste::paste;
 /// These methods all have a `try_`-prefix variant returning an `Option<Self>`.
 
 macro_rules! make_dual {
-    ($name:ident, $($comp:ident),+) => { make_dual!{ $name, $($comp,)+ } };
-    ($name:ident, $($comp:ident,)+) => { $crate::paste! {
+    ($name:ident, $($comp:ident),+) => { make_dual!{ $name: f64, $($comp,)+ } };
+    ($name:ident, $($comp:ident,)+) => { make_dual!{ $name: f64, $($comp,)+ } };
+    ($name:ident: $inner:ty, $($comp:ident),+) => { make_dual!{ $name: $inner, $($comp,)+ } };
+    ($name:ident: $inner:ty, $($comp:ident,)+) => { $crate::paste! {
         macro_rules! impl_reverse {
             ($t:ty, $op:ident, $fn:ident) => {
-                impl std::ops::$op<$t> for f64 {
+                impl std::ops::$op<$t> for $inner {
                     type Output = $t;
 
                     fn $fn(self, other: $t) -> Self::Output {
-                        <$t as std::ops::$op>::$fn(<$t as From<f64>>::from(self), other)
+                        <$t as std::ops::$op>::$fn(<$t as From<$inner>>::from(self), other)
                     }
                 }
             };
@@ -89,9 +92,9 @@ macro_rules! make_dual {
 
         macro_rules! impl_inplace {
             ($t:ty, $op_inplace:ident, $fn_inplace:ident, $op_outofplace:ident, $fn_outofplace:ident) => {
-                impl std::ops::$op_inplace<f64> for $t {
-                    fn $fn_inplace(&mut self, other: f64) {
-                        *self = <Self as std::ops::$op_outofplace<f64>>::$fn_outofplace(*self, other);
+                impl std::ops::$op_inplace<$inner> for $t {
+                    fn $fn_inplace(&mut self, other: $inner) {
+                        *self = <Self as std::ops::$op_outofplace<$inner>>::$fn_outofplace(*self, other);
                     }
                 }
                 impl std::ops::$op_inplace<$t> for $t {
@@ -106,10 +109,10 @@ macro_rules! make_dual {
         #[derive(Copy, Clone, PartialEq, Debug)]
         pub struct $name {
             /// The real value of the dual type
-            pub real: f64,
+            pub real: $inner,
             $(
                 /// Dual component
-                pub [< eps_ $comp >]: f64,
+                pub [< eps_ $comp >]: $inner,
             )+
         }
 
@@ -119,8 +122,8 @@ macro_rules! make_dual {
             }
         }
 
-        impl From<f64> for $name {
-            fn from(real: f64) -> Self {
+        impl From<$inner> for $name {
+            fn from(real: $inner) -> Self {
                 $name {
                     real,
                     $(
@@ -133,7 +136,7 @@ macro_rules! make_dual {
         impl $name {
             $(
                 /// Create instance with specified real and dual part
-                pub fn [<eps_ $comp>](real: f64, [<eps_ $comp>]: f64) -> Self {
+                pub fn [<eps_ $comp>](real: $inner, [<eps_ $comp>]: $inner) -> Self {
                     Self {
                         [<eps_ $comp>]: [<eps_ $comp>],
                         .. Self::from(real)
@@ -142,7 +145,7 @@ macro_rules! make_dual {
             )+
             $(
                 /// Create instance with specified real part and unit dual part
-                pub fn $comp(real: f64) -> Self {
+                pub fn $comp(real: $inner) -> Self {
                     Self::[<eps_ $comp>](real, 1.)
                 }
             )+
@@ -150,13 +153,13 @@ macro_rules! make_dual {
             $(
                 /// Derivative with respect to component
                 /// Shorthand for self.eps_$comp
-                pub fn [<d_d $comp>](self) -> f64 {
+                pub fn [<d_d $comp>](self) -> $inner {
                     self.[<eps_ $comp>]
                 }
             )+
 
             /// Raise `self` to `pow`
-            pub fn pow(self, pow: f64) -> Self {
+            pub fn powf(self, pow: $inner) -> Self {
                 // power rule: d/dx [x^p] = p x^(p-1)
                 Self {
                     real: self.real.powf(pow),
@@ -168,7 +171,7 @@ macro_rules! make_dual {
 
             /// Invert `self` (`1./self`)
             pub fn invert(self) -> Self {
-                self.pow(-1.)
+                self.powf(-1.)
             }
 
             pub fn sin(self) -> Self {
@@ -200,10 +203,10 @@ macro_rules! make_dual {
             }
         }
 
-        impl std::ops::Add<f64> for $name {
+        impl std::ops::Add<$inner> for $name {
             type Output = Self;
 
-            fn add(mut self, other: f64) -> Self::Output {
+            fn add(mut self, other: $inner) -> Self::Output {
                 self.real += other;
                 self
             }
@@ -221,10 +224,10 @@ macro_rules! make_dual {
             }
         }
 
-        impl std::ops::Mul<f64> for $name {
+        impl std::ops::Mul<$inner> for $name {
             type Output = Self;
 
-            fn mul(mut self, other: f64) -> Self::Output {
+            fn mul(mut self, other: $inner) -> Self::Output {
                 self.real *= other;
                 $(
                     self.[<eps_ $comp>] *= other;
@@ -262,10 +265,10 @@ macro_rules! make_dual {
             }
         }
 
-        impl std::ops::Sub<f64> for $name {
+        impl std::ops::Sub<$inner> for $name {
             type Output = Self;
 
-            fn sub(self, other: f64) -> Self::Output {
+            fn sub(self, other: $inner) -> Self::Output {
                 self + -other
             }
         }
@@ -281,7 +284,7 @@ macro_rules! make_dual {
         impl std::ops::Div<f64> for $name {
             type Output = Self;
 
-            fn div(self, other: f64) -> Self::Output {
+            fn div(self, other: $inner) -> Self::Output {
                 self * (1./other)
             }
         }
@@ -297,6 +300,48 @@ macro_rules! make_dual {
     } }
 }
 
+trait Numerical:
+    Copy
+    + std::fmt::Debug
+    + std::fmt::Display
+    + std::ops::Add<Output = Self>
+    + std::ops::Sub<Output = Self>
+    + std::ops::Mul<Output = Self>
+    + std::ops::Div<Output = Self>
+    + std::ops::AddAssign
+    + std::ops::SubAssign
+    + std::ops::MulAssign
+    + std::ops::DivAssign
+{
+    fn powf(self, pow: f64) -> Self;
+    fn invert(self) -> Self;
+    fn sin(self) -> Self;
+    fn cos(self) -> Self;
+    fn tan(self) -> Self;
+}
+
+impl Numerical for f64 {
+    fn powf(self, pow: f64) -> Self {
+        f64::powf(self, pow)
+    }
+
+    fn invert(self) -> Self {
+        1. / self
+    }
+
+    fn sin(self) -> Self {
+        f64::sin(self)
+    }
+
+    fn cos(self) -> Self {
+        f64::cos(self)
+    }
+
+    fn tan(self) -> Self {
+        f64::tan(self)
+    }
+}
+
 #[cfg(any(test, doc))]
 /// # Sample type
 ///
@@ -304,7 +349,7 @@ pub mod sample {
     //! As all types are generated at compile time using [`make_dual`](crate::make_dual), this module serves to show an example generated dual type.
     //!
     //! The type is called `SampleXYZ` and has the fields (components) `x`, `y` and `z`. Function names such as `eps_x` are generated based on the names of the components.
-    crate::make_dual! { SampleXYZ, x, y, z }
+    crate::make_dual! { SampleXYZ: f64, x, y, z }
 }
 
 #[cfg(test)]
@@ -326,7 +371,7 @@ mod tests {
             }
         );
         assert_eq!(
-            SampleXYZ::x(10.).pow(2.),
+            SampleXYZ::x(10.).powf(2.),
             SampleXYZ {
                 real: 100.,
                 eps_x: 20.,
@@ -353,7 +398,7 @@ mod tests {
     fn test_dist() {
         let x = SampleXYZ::x(1.);
         assert_eq!((x + 1.) * (x + 1.), x * x + 2. * x + 1.);
-        assert_eq!((x + 1.) * (x + 1.), (x + 1.).pow(2.),);
+        assert_eq!((x + 1.) * (x + 1.), (x + 1.).powf(2.),);
         assert_eq!((x + 1.) * (x - 1.), x * x - 1.);
     }
 
