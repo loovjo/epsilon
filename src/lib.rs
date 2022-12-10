@@ -46,6 +46,52 @@
 #[doc(hidden)]
 pub use paste::paste;
 
+/// Simple trait specifying the minimum functionality of a real-like number
+/// All dual types will implement this trait, making it useful to make code
+/// generic between dual and real numbers
+pub trait Numerical:
+    Copy
+    + std::fmt::Debug
+    + std::fmt::Display
+    + std::ops::Add<Output = Self>
+    + std::ops::Sub<Output = Self>
+    + std::ops::Mul<Output = Self>
+    + std::ops::Div<Output = Self>
+    + std::ops::AddAssign
+    + std::ops::SubAssign
+    + std::ops::MulAssign
+    + std::ops::DivAssign
+{
+    fn powf(self, pow: f64) -> Self;
+    fn invert(self) -> Self;
+    fn sin(self) -> Self;
+    fn cos(self) -> Self;
+    fn tan(self) -> Self;
+}
+
+impl Numerical for f64 {
+    fn powf(self, pow: f64) -> Self {
+        f64::powf(self, pow)
+    }
+
+    fn invert(self) -> Self {
+        1. / self
+    }
+
+    fn sin(self) -> Self {
+        f64::sin(self)
+    }
+
+    fn cos(self) -> Self {
+        f64::cos(self)
+    }
+
+    fn tan(self) -> Self {
+        f64::tan(self)
+    }
+}
+
+
 #[macro_export]
 /// # Create a dual number
 /// `$name` specifies the name of the type, $inner specifies the backing type
@@ -119,6 +165,21 @@ macro_rules! make_dual {
         impl std::cmp::PartialOrd for $name {
             fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
                 self.real.partial_cmp(&other.real)
+            }
+        }
+
+        impl std::fmt::Display for $name {
+            fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(fmt, "{}", self.real)?;
+                $(
+                    let v = self.[< eps_ $comp >];
+                    if v < 0. {
+                        write!(fmt, " - {} eps_{}", -self.[< eps_ $comp >], stringify!($comp))?;
+                    } else if v > 0. {
+                        write!(fmt, " + {} eps_{}", self.[< eps_ $comp >], stringify!($comp))?;
+                    }
+                )+
+                Ok(())
             }
         }
 
@@ -297,49 +358,30 @@ macro_rules! make_dual {
         impl_inplace!{$name, SubAssign, sub_assign, Sub, sub}
         impl_inplace!{$name, MulAssign, mul_assign, Mul, mul}
         impl_inplace!{$name, DivAssign, div_assign, Div, div}
+
+        impl $crate::Numerical for $name {
+            fn powf(self, pow: f64) -> Self {
+                $name::powf(self, pow)
+            }
+
+            fn invert(self) -> Self {
+                $name::invert(self)
+            }
+
+            fn sin(self) -> Self {
+                $name::sin(self)
+            }
+
+            fn cos(self) -> Self {
+                $name::cos(self)
+            }
+
+            fn tan(self) -> Self {
+                $name::tan(self)
+            }
+        }
+
     } }
-}
-
-trait Numerical:
-    Copy
-    + std::fmt::Debug
-    + std::fmt::Display
-    + std::ops::Add<Output = Self>
-    + std::ops::Sub<Output = Self>
-    + std::ops::Mul<Output = Self>
-    + std::ops::Div<Output = Self>
-    + std::ops::AddAssign
-    + std::ops::SubAssign
-    + std::ops::MulAssign
-    + std::ops::DivAssign
-{
-    fn powf(self, pow: f64) -> Self;
-    fn invert(self) -> Self;
-    fn sin(self) -> Self;
-    fn cos(self) -> Self;
-    fn tan(self) -> Self;
-}
-
-impl Numerical for f64 {
-    fn powf(self, pow: f64) -> Self {
-        f64::powf(self, pow)
-    }
-
-    fn invert(self) -> Self {
-        1. / self
-    }
-
-    fn sin(self) -> Self {
-        f64::sin(self)
-    }
-
-    fn cos(self) -> Self {
-        f64::cos(self)
-    }
-
-    fn tan(self) -> Self {
-        f64::tan(self)
-    }
 }
 
 #[cfg(any(test, doc))]
@@ -387,6 +429,11 @@ mod tests {
                 eps_y: -0.01,
                 eps_z: 0.,
             }
+        );
+
+        assert_eq!(
+            format!("{}", SampleXYZ::y(10.).invert()),
+            "0.1 - 0.01 eps_y"
         );
 
         let mut v = SampleXYZ::x(3.);
